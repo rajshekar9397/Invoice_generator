@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sri Sai Durga Caterers — Invoice Generator</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     :root {
       --bg: #faf9f6;
@@ -799,60 +798,222 @@ function renderPreview(d) {
   </div>`;
 }
 
-// ── Generate PDF — captures the live HTML preview exactly as shown ────────────
-async function generatePDF() {
+// ── Generate PDF — pure jsPDF matching the HTML preview exactly ───────────────
+function generatePDF() {
   if (!currentData) return;
   const d = currentData;
+  const co = COMPANIES[d.company];
 
   const btn = document.getElementById('generateBtn');
   const dlBtn = document.getElementById('dlBtn');
-  const origText = btn.innerHTML;
   btn.innerHTML = '⏳ Generating…';
-  btn.disabled = true;
-  dlBtn.disabled = true;
+  btn.disabled = true; dlBtn.disabled = true;
 
-  try {
-    const sheet = document.getElementById('invoiceSheet');
-    if (!sheet) { alert('Please wait for the preview to load.'); return; }
+  setTimeout(() => {
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      const PW = 595.28, PH = 841.89;
+      const ML = 28, MR = 28, MT = 20;
+      const CW = PW - ML - MR;
 
-    // Render the invoice sheet to a high-res canvas
-    const canvas = await html2canvas(sheet, {
-      scale: 3,           // 3× = crisp on retina & in PDF
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-      windowWidth: sheet.scrollWidth,
-      windowHeight: sheet.scrollHeight
-    });
+      // ── helpers ──
+      const serif  = (bold) => doc.setFont('times', bold ? 'bold' : 'normal');
+      const sans   = (bold) => doc.setFont('helvetica', bold ? 'bold' : 'normal');
+      const sz     = (n)   => doc.setFontSize(n);
+      const lw     = (n)   => doc.setLineWidth(n);
+      const hline  = (y, x1=ML, x2=PW-MR, w=0.5) => { lw(w); doc.line(x1,y,x2,y); };
+      const vline  = (x, y1, y2, w=0.5) => { lw(w); doc.line(x,y1,x,y2); };
+      const rect   = (x,y,w,h,fillCol) => {
+        if (fillCol) { doc.setFillColor(...fillCol); doc.rect(x,y,w,h,'F'); }
+        lw(0.5); doc.rect(x,y,w,h,'S');
+      };
+      const cell = (text, x, y, w, h, opts={}) => {
+        const { bold=false, size=8, align='left', color=[0,0,0], fill=null, serif:useSerif=false } = opts;
+        if (fill) { doc.setFillColor(...fill); doc.rect(x,y,w,h,'F'); }
+        doc.setTextColor(...color);
+        useSerif ? serif(bold) : sans(bold);
+        sz(size);
+        const pad = 4;
+        const ty = y + h/2 + size*0.35;
+        if (align === 'center') doc.text(text, x + w/2, ty, {align:'center'});
+        else if (align === 'right') doc.text(text, x + w - pad, ty, {align:'right'});
+        else doc.text(text, x + pad, ty);
+        doc.setTextColor(0,0,0);
+      };
 
-    const imgData = canvas.toDataURL('image/png');
+      let y = MT;
 
-    // A4 dimensions in mm
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-    const pageW = 210, pageH = 297;
-    const margin = 8; // mm padding on all sides
+      // ── HEADER ──────────────────────────────────────────────────────────────
+      serif(true); sz(20); doc.setTextColor(0,0,0);
+      doc.text('SRI SAI DURGA CATERERS', PW/2, y+18, {align:'center'});
+      y += 24;
+      sans(false); sz(8);
+      doc.text('H.NO: Survey No.271,272 Lingotam(V),Choutuppal (M),Yadadri District   Cell No:9246333799', PW/2, y+8, {align:'center'});
+      y += 13;
+      sans(true); sz(9);
+      doc.text('GSTIN:'+CATERER.gstin, PW/2, y+8, {align:'center'});
+      y += 14;
 
-    const printW = pageW - margin * 2;
-    const printH = (canvas.height / canvas.width) * printW;
+      // heavy rule under header
+      lw(1.5); doc.line(ML, y, PW-MR, y); y += 2;
 
-    // If taller than a page, scale down to fit
-    const finalH = Math.min(printH, pageH - margin * 2);
-    const finalW = (canvas.width / canvas.height) * finalH;
-    const xOffset = margin + (printW - finalW) / 2;
+      // TAX INVOICE title
+      sans(true); sz(11);
+      doc.text('TAX INVOICE', PW/2, y+11, {align:'center'});
+      const tiw = doc.getTextWidth('TAX INVOICE');
+      lw(0.8); doc.line(PW/2-tiw/2, y+12.5, PW/2+tiw/2, y+12.5);
+      y += 18; lw(1); doc.line(ML, y, PW-MR, y);
 
-    pdf.addImage(imgData, 'PNG', xOffset, margin, finalW, finalH, '', 'FAST');
+      // ── META ROWS ────────────────────────────────────────────────────────────
+      const RH = 17; // row height pts
+      const half = CW/2;
 
-    const filename = `Invoice_${String(d.invNo).padStart(3,'0')}_${d.company.replace(/\s+/g,'_').slice(0,20)}_${d.invDate.replace(/-/g,'')}.pdf`;
-    pdf.save(filename);
-  } catch(err) {
-    console.error(err);
-    alert('PDF generation failed. Please try again.');
-  } finally {
-    btn.innerHTML = origText;
-    btn.disabled = false;
-    dlBtn.disabled = false;
-  }
+      const metaRows = [
+        [`Invoice No: ${String(d.invNo).padStart(3,'0')}`, 'Work Order No.'],
+        [`Invoice Date: ${d.invDate}`, 'Work Order Date:'],
+        ['Reverse Charge (Y/N)', 'No.'],
+        [`State: ${CATERER.state}`, `Code: ${CATERER.code}`],
+      ];
+      metaRows.forEach(([l,r]) => {
+        vline(ML,y,y+RH); vline(ML+half,y,y+RH); vline(PW-MR,y,y+RH);
+        cell(l, ML, y, half, RH, {bold: l.startsWith('Invoice'), size:8.5});
+        cell(r, ML+half, y, half, RH, {size:8.5});
+        y += RH; hline(y);
+      });
+
+      // ── PARTY SECTION ────────────────────────────────────────────────────────
+      const partyRows = [
+        ['Name Of The Party (Bill To)', 'NAME OF THE CONSIGNEE', true],
+        ['Name: '+d.company, 'Name: '+CATERER.consignee, false],
+        ['Address: '+co.address, 'Address: '+CATERER.consigneeAddr, false],
+        ['GSTIN: '+co.gstin, 'GSTIN: '+CATERER.gstin, false],
+        ['State: '+co.state+'   Code: '+co.code, 'State: '+CATERER.state, false],
+      ];
+      partyRows.forEach(([l,r,bold]) => {
+        vline(ML,y,y+RH); vline(ML+half,y,y+RH); vline(PW-MR,y,y+RH);
+        cell(l, ML, y, half, RH, {bold, size:8.5});
+        cell(r, ML+half, y, half, RH, {bold, size:8.5});
+        y += RH; hline(y);
+      });
+
+      // ── ITEMS TABLE HEADER ───────────────────────────────────────────────────
+      const colW = [22, 130, 42, 32, 32, 32, 62];
+      const colH = ['S.No','Product / Service Description','HSN/SAC','UOM','Qty.','Rate','Taxable Value'];
+      const hdrH = 20;
+      let x = ML;
+      colW.forEach((w,i) => {
+        cell(colH[i], x, y, w, hdrH, {bold:true, size:8, align:'center', fill:[245,245,245]});
+        vline(x,y,y+hdrH);
+        x += w;
+      });
+      vline(x,y,y+hdrH);
+      hline(y); hline(y+hdrH,ML,PW-MR,1);
+      y += hdrH;
+
+      // ── ITEM ROW ─────────────────────────────────────────────────────────────
+      const itemH = 52;
+      x = ML;
+      colW.forEach((w) => { vline(x,y,y+itemH); x+=w; });
+      vline(x,y,y+itemH);
+      cell('1', ML, y, colW[0], itemH, {align:'center', size:9});
+      cell('Food supply service', ML+colW[0], y, colW[1], itemH, {bold:true, size:9});
+      cell(fmtINR(d.amount)+'.00', PW-MR-colW[6], y, colW[6], itemH, {bold:true, size:9, align:'right'});
+      hline(y); hline(y+itemH,ML,PW-MR,1);
+      y += itemH;
+
+      // ── WORDS ROW ────────────────────────────────────────────────────────────
+      const wordsH = 22;
+      vline(ML,y,y+wordsH); vline(PW-MR,y,y+wordsH);
+      sans(false); sz(8.5);
+      doc.setFont('times','italic');
+      doc.text('Total invoice amount (in words): '+amountInWords(d.total), ML+4, y+wordsH/2+3);
+      hline(y+wordsH);
+      y += wordsH;
+
+      // ── TOTALS + BANK SECTION ─────────────────────────────────────────────────
+      const LW = CW * 0.52;
+      const RW = CW - LW;
+      const RX = ML + LW;
+      const RL = RW * 0.56;
+      const RV = RW - RL;
+
+      const totals = [
+        ['Total amount before tax', fmtINR(d.amount)+'.00', false],
+        ['Add: CGST @9%', fmtINR(d.cgst)+'.00', false],
+        ['Add: SGST @9%', fmtINR(d.sgst)+'.00', false],
+        ['Total tax amount', fmtINR(d.cgst+d.sgst)+'.00', false],
+        ['Total amount after tax', fmtINR(d.total)+'.00', true],
+      ];
+
+      const bankLines = [
+        ['Bank Details: '+CATERER.bank, ''],
+        ['Bank Branch: '+CATERER.branch, ''],
+        ['Account Name: '+CATERER.accountName, ''],
+        ['Bank Account No: '+CATERER.accountNo, ''],
+        ['Bank IFSC: '+CATERER.ifsc, ''],
+      ];
+
+      // draw 5 bank rows alongside 5 total rows
+      const startY = y;
+      totals.forEach(([label,val,bold],i) => {
+        const ry = startY + i*RH;
+        // left bank col
+        vline(ML,ry,ry+RH);
+        if (i < bankLines.length) {
+          const [bl] = bankLines[i];
+          cell(bl, ML, ry, LW, RH, {size:8});
+        }
+        // right totals
+        vline(RX,ry,ry+RH); vline(RX+RL,ry,ry+RH); vline(PW-MR,ry,ry+RH);
+        cell(label, RX, ry, RL, RH, {size:8.5, bold});
+        cell(val, RX+RL, ry, RV, RH, {size:8.5, bold, align:'right'});
+        hline(ry); hline(ry+RH);
+      });
+      vline(ML, startY, startY+5*RH);
+      y = startY + 5*RH;
+
+      // certified + KV SUBBA REDDY on right
+      const certH = 14;
+      vline(ML,y,y+certH); vline(RX,y,y+certH); vline(PW-MR,y,y+certH);
+      sans(false); sz(7.5);
+      doc.text('Certified that the particulars given above are true and correct', RX+4, y+9);
+      hline(y); hline(y+certH);
+      y += certH;
+
+      const kvH = 14;
+      vline(ML,y,y+kvH); vline(RX,y,y+kvH); vline(PW-MR,y,y+kvH);
+      sans(true); sz(9);
+      doc.text(CATERER.consignee, RX+RW/2, y+kvH/2+3, {align:'center'});
+      hline(y+kvH);
+      y += kvH;
+
+      // ── DECLARATION ───────────────────────────────────────────────────────────
+      const declH = 44;
+      vline(ML,y,y+declH); vline(RX,y,y+declH); vline(PW-MR,y,y+declH);
+      sans(true); sz(8.5); doc.text('Declaration:', ML+4, y+12);
+      sans(false); sz(8);
+      doc.text('We Declare That This Invoice Shows The Actual Value Of', ML+4, y+24);
+      doc.text('The Described And That All Particulars Are True And correct', ML+4, y+34);
+      sans(true); sz(9);
+      doc.text('Authorized Signatory', RX+RW/2, y+declH-8, {align:'center'});
+      hline(y); lw(1); hline(y+declH);
+
+      // ── SAVE ──────────────────────────────────────────────────────────────────
+      const filename = `Invoice_${String(d.invNo).padStart(3,'0')}_${d.company.replace(/\s+/g,'_').slice(0,20)}_${d.invDate.replace(/-/g,'')}.pdf`;
+      doc.save(filename);
+
+    } catch(err) {
+      console.error(err);
+      alert('PDF generation failed: ' + err.message);
+    } finally {
+      btn.innerHTML = origHTML;
+      btn.disabled = false; dlBtn.disabled = false;
+    }
+  }, 50);
+
+  const origHTML = btn.innerHTML.replace('⏳ Generating…', btn.getAttribute('data-orig') || btn.innerHTML);
+  btn.setAttribute('data-orig', btn.innerHTML);
 }
 </script>
 </body>
