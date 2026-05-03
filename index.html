@@ -1,0 +1,939 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sri Sai Durga Caterers — Invoice Generator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #faf9f6;
+      --surface: #ffffff;
+      --border: #e5e2da;
+      --border-strong: #c8c4ba;
+      --text: #1a1916;
+      --text-muted: #6b6860;
+      --text-faint: #9c9a94;
+      --accent: #1d4e3a;
+      --accent-light: #e8f2ee;
+      --accent-mid: #2d7a5a;
+      --danger: #c0392b;
+      --gold: #b8860b;
+      --gold-light: #fdf6e3;
+      --radius: 10px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Georgia', 'Times New Roman', serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--accent);
+      color: white;
+      padding: 28px 40px 24px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .header-logo {
+      width: 52px; height: 52px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      border: 1.5px solid rgba(255,255,255,0.3);
+      flex-shrink: 0;
+    }
+    .header-text h1 {
+      font-size: 20px;
+      font-weight: normal;
+      letter-spacing: 0.5px;
+    }
+    .header-text p {
+      font-size: 12px;
+      opacity: 0.65;
+      font-family: 'Courier New', monospace;
+      margin-top: 2px;
+      letter-spacing: 1px;
+    }
+
+    /* ── Layout ── */
+    .app {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 0;
+      min-height: calc(100vh - 104px);
+    }
+
+    /* ── Left panel: form ── */
+    .form-panel {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 36px 32px;
+      overflow-y: auto;
+    }
+
+    .section-label {
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 16px;
+    }
+
+    .form-group {
+      margin-bottom: 24px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 7px;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 0.5px;
+    }
+
+    select, input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-family: 'Georgia', serif;
+      color: var(--text);
+      background: var(--bg);
+      appearance: none;
+      -webkit-appearance: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none;
+    }
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6860' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 36px;
+      cursor: pointer;
+    }
+    select:focus, input:focus {
+      border-color: var(--accent-mid);
+      box-shadow: 0 0 0 3px rgba(45,122,90,0.12);
+    }
+
+    .amount-wrap {
+      position: relative;
+    }
+    .amount-wrap .rupee {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 15px;
+      pointer-events: none;
+    }
+    .amount-wrap input {
+      padding-left: 30px;
+    }
+
+    /* ── GST breakdown cards ── */
+    .gst-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .gst-card {
+      background: var(--accent-light);
+      border: 1px solid #c5ddd3;
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+    .gst-card .gst-label {
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--accent-mid);
+      margin-bottom: 4px;
+    }
+    .gst-card .gst-value {
+      font-size: 18px;
+      color: var(--accent);
+      font-weight: normal;
+    }
+    .total-card {
+      background: var(--accent);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .total-card .tlabel {
+      color: rgba(255,255,255,0.7);
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+    .total-card .tvalue {
+      color: white;
+      font-size: 22px;
+    }
+
+    .words-box {
+      background: var(--gold-light);
+      border: 1px solid #e8d5a0;
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      font-size: 13px;
+      color: var(--gold);
+      font-style: italic;
+      line-height: 1.5;
+      margin-bottom: 28px;
+    }
+
+    /* ── Invoice meta ── */
+    .meta-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    /* ── Generate button ── */
+    .btn-generate {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-family: 'Georgia', serif;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .btn-generate:hover { background: #163d2d; }
+    .btn-generate:active { transform: scale(0.99); }
+    .btn-generate:disabled {
+      background: var(--border-strong);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ── Right panel: preview ── */
+    .preview-panel {
+      background: #edeae3;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-y: auto;
+    }
+
+    .preview-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+      align-self: flex-start;
+      width: 100%;
+    }
+    .preview-toolbar h2 {
+      font-size: 13px;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      flex: 1;
+    }
+    .btn-download {
+      padding: 8px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: 'Courier New', monospace;
+      cursor: pointer;
+      color: var(--text);
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-download:hover { background: var(--accent-light); }
+    .btn-download:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Invoice preview ── */
+    .invoice-sheet {
+      background: white;
+      width: 100%;
+      max-width: 680px;
+      box-shadow: var(--shadow);
+      border-radius: 4px;
+      padding: 36px 40px;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #111;
+    }
+
+    .inv-header {
+      text-align: center;
+      border-bottom: 2px solid #111;
+      padding-bottom: 14px;
+      margin-bottom: 14px;
+    }
+    .inv-header h1 {
+      font-size: 22px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      font-family: 'Georgia', serif;
+    }
+    .inv-header p {
+      font-size: 10px;
+      margin-top: 3px;
+      color: #333;
+    }
+    .inv-header .gstin {
+      font-weight: bold;
+      font-size: 11px;
+      margin-top: 4px;
+    }
+
+    .inv-title {
+      text-align: center;
+      font-size: 13px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      text-decoration: underline;
+      margin: 10px 0;
+    }
+
+    table.inv-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10.5px;
+    }
+    table.inv-table td, table.inv-table th {
+      border: 1px solid #aaa;
+      padding: 5px 7px;
+      vertical-align: middle;
+    }
+    table.inv-table th {
+      background: #f5f5f5;
+      font-weight: bold;
+      text-align: center;
+    }
+    .inv-meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      border: 1px solid #aaa;
+      margin-bottom: 0;
+    }
+    .inv-meta-cell {
+      padding: 5px 7px;
+      border-right: 1px solid #aaa;
+      border-bottom: 1px solid #aaa;
+      font-size: 10px;
+    }
+    .inv-meta-cell:nth-child(even) { border-right: none; }
+    .inv-meta-cell strong { font-weight: bold; }
+
+    .inv-party {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border: 1px solid #aaa;
+      border-top: none;
+    }
+    .inv-party-col {
+      padding: 7px 8px;
+      border-right: 1px solid #aaa;
+      font-size: 10px;
+      line-height: 1.7;
+    }
+    .inv-party-col:last-child { border-right: none; }
+    .inv-party-col .col-head {
+      font-weight: bold;
+      font-size: 10.5px;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 3px;
+      margin-bottom: 4px;
+    }
+
+    .inv-items {
+      border: 1px solid #aaa;
+      border-top: none;
+    }
+    .inv-items table { border: none; }
+    .inv-items table td, .inv-items table th {
+      border: 1px solid #ccc;
+      border-top: none;
+    }
+    .inv-items table td:first-child, .inv-items table th:first-child { border-left: none; }
+    .inv-items table td:last-child, .inv-items table th:last-child { border-right: none; }
+
+    .inv-footer {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border: 1px solid #aaa;
+      border-top: none;
+    }
+    .inv-footer-left {
+      padding: 7px 8px;
+      border-right: 1px solid #aaa;
+      font-size: 9.5px;
+      line-height: 1.7;
+    }
+    .inv-footer-right {
+      padding: 0;
+    }
+    .inv-total-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 8px;
+      border-bottom: 1px solid #ddd;
+      font-size: 10px;
+    }
+    .inv-total-row:last-child { border-bottom: none; }
+    .inv-total-row.bold { font-weight: bold; font-size: 11px; }
+
+    .inv-words {
+      grid-column: 1 / -1;
+      padding: 6px 8px;
+      border: 1px solid #aaa;
+      border-top: none;
+      border-bottom: none;
+      font-size: 10px;
+      font-style: italic;
+    }
+
+    .inv-signblock {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border: 1px solid #aaa;
+      border-top: none;
+    }
+    .inv-signblock-cell {
+      padding: 8px;
+      border-right: 1px solid #aaa;
+      font-size: 9.5px;
+      min-height: 60px;
+    }
+    .inv-signblock-cell:last-child { border-right: none; }
+
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--text-faint);
+    }
+    .empty-state .icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.4;
+    }
+    .empty-state p {
+      font-size: 13px;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 1px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+
+    @media (max-width: 860px) {
+      .app { grid-template-columns: 1fr; }
+      .preview-panel { display: none; }
+      header { padding: 20px 20px; }
+      .form-panel { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-logo">🍽</div>
+  <div class="header-text">
+    <h1>Sri Sai Durga Caterers</h1>
+    <p>GSTIN: 36BYSPK2350N2ZT &nbsp;·&nbsp; TAX INVOICE GENERATOR</p>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- ── LEFT: Form ────────────────────────────────────────── -->
+  <aside class="form-panel">
+
+    <p class="section-label">Client Details</p>
+
+    <div class="form-group">
+      <label for="company">Company Name</label>
+      <select id="company" onchange="recalc()">
+        <option value="">— Select Company —</option>
+        <option value="Srini Pharmaceuticals PVT Limited" data-gstin="36AACCS8456P1ZK">Srini Pharmaceuticals PVT Limited</option>
+        <option value="Veena Life sciences india PVT LTD" data-gstin="36AADCV8543R1ZG">Veena Life sciences india PVT LTD</option>
+      </select>
+    </div>
+
+    <hr class="divider" />
+    <p class="section-label">Invoice Details</p>
+
+    <div class="meta-row">
+      <div class="form-group" style="margin-bottom:0">
+        <label for="invNo">Invoice Number</label>
+        <input type="text" id="invNo" value="001" oninput="recalc()" />
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label for="invDate">Invoice Date</label>
+        <input type="text" id="invDate" id="invDate" oninput="recalc()" />
+      </div>
+    </div>
+
+    <hr class="divider" />
+    <p class="section-label">Amount</p>
+
+    <div class="form-group">
+      <label for="amount">Taxable Amount (before GST)</label>
+      <div class="amount-wrap">
+        <span class="rupee">₹</span>
+        <input type="number" id="amount" placeholder="0" min="0" oninput="recalc()" />
+      </div>
+    </div>
+
+    <!-- GST breakdown -->
+    <div class="gst-grid">
+      <div class="gst-card">
+        <div class="gst-label">CGST @ 9%</div>
+        <div class="gst-value" id="cgst-display">₹ 0</div>
+      </div>
+      <div class="gst-card">
+        <div class="gst-label">SGST @ 9%</div>
+        <div class="gst-value" id="sgst-display">₹ 0</div>
+      </div>
+    </div>
+
+    <div class="total-card">
+      <span class="tlabel">Total (incl. GST)</span>
+      <span class="tvalue" id="total-display">₹ 0</span>
+    </div>
+
+    <div class="words-box" id="words-display">
+      Enter an amount to see total in words
+    </div>
+
+    <button class="btn-generate" id="generateBtn" onclick="generatePDF()" disabled>
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+      </svg>
+      Generate &amp; Download PDF
+    </button>
+
+  </aside>
+
+  <!-- ── RIGHT: Live Preview ───────────────────────────────── -->
+  <main class="preview-panel">
+    <div class="preview-toolbar">
+      <h2>Live Preview</h2>
+      <button class="btn-download" id="dlBtn" onclick="generatePDF()" disabled>
+        ↓ Download PDF
+      </button>
+    </div>
+
+    <div id="preview-area">
+      <div class="empty-state">
+        <div class="icon">📄</div>
+        <p>Select a company and enter<br>an amount to preview invoice</p>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<script>
+// ── Data ─────────────────────────────────────────────────────────────────────
+const COMPANIES = {
+  "Srini Pharmaceuticals PVT Limited": {
+    gstin: "36AACCS8456P1ZK",
+    address: "Choutuppal vill & mandal, yadadri dist. - 508252",
+    state: "TELANGANA", code: "36"
+  },
+  "Veena Life sciences india PVT LTD": {
+    gstin: "36AADCV8543R1ZG",
+    address: "Choutuppal vill & mandal, yadadri dist. - 508252",
+    state: "TELANGANA", code: "36"
+  }
+};
+
+const CATERER = {
+  gstin: "36BYSPK2350N2ZT",
+  state: "Telangana", code: "36",
+  bank: "State Bank Of Hyderabad",
+  branch: "Choutuppal, Yadadri",
+  accountName: "Sri Sai Durga Caterers",
+  accountNo: "62420572048",
+  ifsc: "SBHY0021183",
+  consignee: "K V SUBBA REDDY",
+  consigneeAddr: "Choutuppal,Yadadri Dist."
+};
+
+// ── Init date ─────────────────────────────────────────────────────────────────
+(function() {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yyyy = d.getFullYear();
+  document.getElementById('invDate').value = `${dd}-${mm}-${yyyy}`;
+})();
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function floorGST(amount) { return Math.floor(amount * 0.09); }
+
+function fmtINR(n) {
+  const s = String(Math.round(n));
+  if (s.length <= 3) return s;
+  const last3 = s.slice(-3);
+  const rest = s.slice(0, -3);
+  const groups = [];
+  let tmp = rest;
+  while (tmp.length > 0) { groups.unshift(tmp.slice(-2)); tmp = tmp.slice(0, -2); }
+  return groups.join(',') + ',' + last3;
+}
+
+function numberToWords(n) {
+  const ones = ['','one','two','three','four','five','six','seven','eight','nine',
+    'ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen',
+    'eighteen','nineteen'];
+  const tens = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+
+  function belowThousand(num) {
+    if (!num) return '';
+    if (num < 20) return ones[num];
+    if (num < 100) return tens[Math.floor(num/10)] + (num%10 ? ' '+ones[num%10] : '');
+    return ones[Math.floor(num/100)] + ' hundred' + (num%100 ? ' '+belowThousand(num%100) : '');
+  }
+
+  if (!n) return 'zero';
+  let parts = [], rem = n;
+  const crore = Math.floor(rem/10000000); rem %= 10000000;
+  const lakh  = Math.floor(rem/100000);   rem %= 100000;
+  const thou  = Math.floor(rem/1000);     rem %= 1000;
+  if (crore) parts.push(belowThousand(crore)+' crore');
+  if (lakh)  parts.push(belowThousand(lakh)+' lakh');
+  if (thou)  parts.push(belowThousand(thou)+' thousand');
+  if (rem)   parts.push(belowThousand(rem));
+  const w = parts.join(' ');
+  return w.charAt(0).toUpperCase() + w.slice(1);
+}
+
+function amountInWords(total) {
+  const r = Math.floor(total);
+  return numberToWords(r) + ' rupees only';
+}
+
+// ── Recalculate ───────────────────────────────────────────────────────────────
+let currentData = null;
+
+function recalc() {
+  const company = document.getElementById('company').value;
+  const amount  = parseFloat(document.getElementById('amount').value) || 0;
+  const invNo   = document.getElementById('invNo').value.trim();
+  const invDate = document.getElementById('invDate').value.trim();
+
+  const cgst  = floorGST(amount);
+  const sgst  = floorGST(amount);
+  const total = amount + cgst + sgst;
+
+  document.getElementById('cgst-display').textContent = '₹ ' + fmtINR(cgst);
+  document.getElementById('sgst-display').textContent = '₹ ' + fmtINR(sgst);
+  document.getElementById('total-display').textContent = '₹ ' + fmtINR(total);
+
+  if (amount > 0) {
+    document.getElementById('words-display').textContent = amountInWords(total);
+  } else {
+    document.getElementById('words-display').textContent = 'Enter an amount to see total in words';
+  }
+
+  const ready = company && amount > 0 && invNo && invDate;
+  document.getElementById('generateBtn').disabled = !ready;
+  document.getElementById('dlBtn').disabled = !ready;
+
+  if (ready) {
+    currentData = { company, amount, cgst, sgst, total, invNo, invDate };
+    renderPreview(currentData);
+  } else {
+    currentData = null;
+    if (!company || !amount) {
+      document.getElementById('preview-area').innerHTML = `
+        <div class="empty-state">
+          <div class="icon">📄</div>
+          <p>Select a company and enter<br>an amount to preview invoice</p>
+        </div>`;
+    }
+  }
+}
+
+// ── Render HTML preview ───────────────────────────────────────────────────────
+function renderPreview(d) {
+  const co = COMPANIES[d.company];
+  const words = amountInWords(d.total);
+
+  document.getElementById('preview-area').innerHTML = `
+  <div class="invoice-sheet" id="invoiceSheet">
+    <div class="inv-header">
+      <h1>SRI SAI DURGA CATERERS</h1>
+      <p>H.NO: Survey No.271,272 Lingotam(V),Choutuppal (M),Yadadri District &nbsp;Cell No:9246333799</p>
+      <p class="gstin">GSTIN:${CATERER.gstin}</p>
+    </div>
+
+    <div class="inv-title">TAX INVOICE</div>
+
+    <div class="inv-meta-grid">
+      <div class="inv-meta-cell"><strong>Invoice No:</strong>${d.invNo.padStart(3,'0')}</div>
+      <div class="inv-meta-cell"><strong>Work Order No.</strong></div>
+      <div class="inv-meta-cell"><strong>Invoice Date:</strong>${d.invDate}</div>
+      <div class="inv-meta-cell"><strong>Work Order Date:</strong></div>
+      <div class="inv-meta-cell"><strong>Reverse Charge (Y/N)</strong></div>
+      <div class="inv-meta-cell">No.</div>
+      <div class="inv-meta-cell"><strong>State:</strong> ${CATERER.state}</div>
+      <div class="inv-meta-cell"><strong>Code:</strong> ${CATERER.code}</div>
+    </div>
+
+    <div class="inv-party">
+      <div class="inv-party-col">
+        <div class="col-head">Name Of The Party (Bill To)</div>
+        <div><strong>Name:</strong> ${d.company}</div>
+        <div><strong>Address:</strong> ${co.address}</div>
+        <div><strong>GSTIN:</strong> ${co.gstin}</div>
+        <div><strong>State:</strong> ${co.state} &nbsp; <strong>Code:</strong> ${co.code}</div>
+      </div>
+      <div class="inv-party-col">
+        <div class="col-head">Name Of The Consignee</div>
+        <div><strong>Name:</strong> ${CATERER.consignee}</div>
+        <div><strong>Address:</strong> ${CATERER.consigneeAddr}</div>
+        <div><strong>GSTIN:</strong> ${CATERER.gstin}</div>
+        <div><strong>State:</strong> ${CATERER.state}</div>
+      </div>
+    </div>
+
+    <div class="inv-items">
+      <table class="inv-table">
+        <thead>
+          <tr>
+            <th style="width:5%">S.No</th>
+            <th style="width:37%">Product / Service Description</th>
+            <th style="width:13%">HSN/SAC</th>
+            <th style="width:10%">UOM</th>
+            <th style="width:10%">Qty.</th>
+            <th style="width:10%">Rate</th>
+            <th style="width:15%">Taxable Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="text-align:center">1</td>
+            <td><strong>Food supply service</strong></td>
+            <td></td><td></td><td></td><td></td>
+            <td style="text-align:right"><strong>${fmtINR(d.amount)}.00</strong></td>
+          </tr>
+          <tr><td colspan="7" style="height:40px;border:none;border-bottom:1px solid #aaa"></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="inv-words">
+      Total invoice amount (in words): <em>${words}</em>
+    </div>
+
+    <div class="inv-footer">
+      <div class="inv-footer-left">
+        <div><strong>Bank Details:</strong> ${CATERER.bank}</div>
+        <div><strong>Bank Branch:</strong> ${CATERER.branch}</div>
+        <div><strong>Account Name:</strong> ${CATERER.accountName}</div>
+        <div><strong>Bank Account No:</strong> ${CATERER.accountNo}</div>
+        <div><strong>Bank IFSC:</strong> ${CATERER.ifsc}</div>
+      </div>
+      <div class="inv-footer-right">
+        <div class="inv-total-row"><span>Total amount before tax</span><span>${fmtINR(d.amount)}.00</span></div>
+        <div class="inv-total-row"><span>Add: CGST @9%</span><span>${fmtINR(d.cgst)}.00</span></div>
+        <div class="inv-total-row"><span>Add: SGST @9%</span><span>${fmtINR(d.sgst)}.00</span></div>
+        <div class="inv-total-row"><span>Total tax amount</span><span>${fmtINR(d.cgst+d.sgst)}.00</span></div>
+        <div class="inv-total-row bold"><span>Total amount after tax</span><span>${fmtINR(d.total)}.00</span></div>
+        <div style="padding:6px 8px;font-size:9px;color:#555;border-top:1px solid #ddd">
+          Certified that the particulars given above are true and correct
+        </div>
+        <div style="padding:2px 8px 8px;font-weight:bold;font-size:10px">${CATERER.consignee}</div>
+      </div>
+    </div>
+
+    <div class="inv-signblock">
+      <div class="inv-signblock-cell">
+        <strong>Declaration:</strong><br>
+        We Declare That This Invoice Shows The Actual Value Of<br>
+        The Described And That All Particulars Are True And correct
+      </div>
+      <div class="inv-signblock-cell" style="text-align:right;display:flex;align-items:flex-end;justify-content:flex-end;">
+        <strong>Authorized Signatory</strong>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Generate PDF using jsPDF ─────────────────────────────────────────────────
+function generatePDF() {
+  if (!currentData) return;
+  const d = currentData;
+  const co = COMPANIES[d.company];
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210, ml = 12, mr = 12, cw = W - ml - mr;
+
+  let y = 12;
+  const line  = (y1, x1=ml, x2=W-mr, w=0.3) => { doc.setLineWidth(w); doc.line(x1, y1, x2, y1); };
+  const vline = (x, y1, y2, w=0.3) => { doc.setLineWidth(w); doc.line(x, y1, x, y2); };
+  const txt   = (t, x, yy, opts={}) => {
+    doc.setFontSize(opts.size||9);
+    doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+    if (opts.align === 'center') doc.text(String(t), x, yy, {align:'center'});
+    else if (opts.align === 'right') doc.text(String(t), x, yy, {align:'right'});
+    else doc.text(String(t), x, yy);
+  };
+
+  // Header
+  txt('SRI SAI DURGA CATERERS', W/2, y+6, {size:18, bold:true, align:'center'});
+  y += 8;
+  txt('H.NO: Survey No.271,272 Lingotam(V),Choutuppal (M),Yadadri District', W/2, y+4, {size:8, align:'center'});
+  y += 5; txt('Cell No:9246333799', W/2, y+3, {size:8, align:'center'});
+  y += 4; txt('GSTIN:'+CATERER.gstin, W/2, y+3, {size:8, bold:true, align:'center'});
+  y += 6; line(y); y += 1;
+  txt('TAX INVOICE', W/2, y+4, {size:11, bold:true, align:'center'});
+  y += 6; line(y, ml, W-mr, 0.6);
+
+  // Meta rows
+  const rh = 6;
+  const metaRows = [
+    [`Invoice No:${d.invNo.padStart(3,'0')}`, 'Work Order No.'],
+    [`Invoice Date:${d.invDate}`, 'Work Order Date:'],
+    ['Reverse Charge (Y/N)', 'No.'],
+    [`State: ${CATERER.state}   Code: ${CATERER.code}`, ''],
+  ];
+  metaRows.forEach(([l, r]) => {
+    vline(ml, y, y+rh); vline(W-mr, y, y+rh); vline(W/2, y, y+rh);
+    txt(l, ml+2, y+4, {size:8, bold: l.startsWith('Invoice')});
+    if (r) txt(r, W/2+2, y+4, {size:8});
+    y += rh; line(y);
+  });
+
+  // Party section
+  const partyRows = [
+    ['Name Of The Party (Bill To)', 'NAME OF THE CONSIGNEE'],
+    ['Name: '+d.company, 'Name: '+CATERER.consignee],
+    ['Address: '+co.address, 'Address: '+CATERER.consigneeAddr],
+    ['GSTIN: '+co.gstin, 'GSTIN: '+CATERER.gstin],
+    ['State: '+co.state+'  Code: '+co.code, 'State: '+CATERER.state],
+  ];
+  partyRows.forEach(([l,r], i) => {
+    vline(ml, y, y+rh); vline(W-mr, y, y+rh); vline(W/2, y, y+rh);
+    txt(l, ml+2, y+4, {size:8, bold:i===0});
+    txt(r, W/2+2, y+4, {size:8, bold:i===0});
+    y += rh; line(y);
+  });
+
+  // Items header
+  const cols = [10, 57, 18, 14, 14, 14, 27]; // widths
+  const headers = ['S.No','Product/Service','HSN/SAC','UOM','Qty.','Rate','Taxable Value'];
+  let x = ml;
+  vline(ml, y, y+rh+1);
+  headers.forEach((h, i) => {
+    txt(h, x + cols[i]/2, y+4, {size:7.5, bold:true, align:'center'});
+    x += cols[i];
+    vline(x, y, y+rh+1);
+  });
+  y += rh; line(y, ml, W-mr, 0.5); y += 1;
+
+  // Item row
+  const itemH = 28;
+  vline(ml, y, y+itemH); vline(W-mr, y, y+itemH);
+  x = ml;
+  cols.forEach(c => { x += c; vline(x, y, y+itemH); });
+  txt('1', ml+5, y+5, {size:8, align:'center'});
+  txt('Food supply service', ml+cols[0]+2, y+5, {size:8, bold:true});
+  txt(fmtINR(d.amount)+'.00', W-mr-1, y+5, {size:8, bold:true, align:'right'});
+  y += itemH; line(y, ml, W-mr, 0.6);
+
+  // Words
+  const wordsH = 9;
+  vline(ml, y, y+wordsH); vline(W-mr, y, y+wordsH);
+  txt('Total invoice amount (in words): '+amountInWords(d.total), ml+2, y+5, {size:8});
+  y += wordsH; line(y);
+
+  // Totals
+  const lw = cw * 0.54, rw = cw - lw;
+  const rx = ml + lw;
+  const rl = rw * 0.55, rv = rw * 0.45;
+  const totRows = [
+    ['Total amount before tax', fmtINR(d.amount)+'.00', false],
+    ['Add: CGST @9%', fmtINR(d.cgst)+'.00', false],
+    ['Add: SGST @9%', fmtINR(d.sgst)+'.00', false],
+    ['Total tax amount', fmtINR(d.cgst+d.sgst)+'.00', false],
+    ['Total amount after tax', fmtINR(d.total)+'.00', true],
+  ];
+  totRows.forEach(([label, val, bold]) => {
+    vline(ml, y, y+rh); vline(rx, y, y+rh); vline(rx+rl, y, y+rh); vline(W-mr, y, y+rh);
+    txt(label, rx+2, y+4, {size:8, bold});
+    txt(val, W-mr-1, y+4, {size:8, bold, align:'right'});
+    y += rh; line(y);
+  });
+
+  // Bank + certified
+  const bankLines = [
+    'Bank Details: '+CATERER.bank,
+    'Bank Branch: '+CATERER.branch,
+    'Account Name: '+CATERER.accountName,
+    'Bank Account No: '+CATERER.accountNo,
+    'Bank IFSC: '+CATERER.ifsc,
+  ];
+  bankLines.forEach((bl, i) => {
+    vline(ml, y, y+rh); vline(rx, y, y+rh); vline(W-mr, y, y+rh);
+    txt(bl, ml+2, y+4, {size:8});
+    if (i===0) txt('Certified that particulars given above are true and correct', rx+2, y+3.5, {size:7});
+    if (i===1) txt(CATERER.consignee, rx+rw/2, y+4.5, {size:8, bold:true, align:'center'});
+    y += rh; line(y);
+  });
+
+  // Declaration
+  const declH = 16;
+  vline(ml, y, y+declH); vline(rx, y, y+declH); vline(W-mr, y, y+declH);
+  txt('Declaration:', ml+2, y+4, {size:8, bold:true});
+  txt('We Declare That This Invoice Shows The Actual Value Of', ml+2, y+8, {size:7.5});
+  txt('The Described And That All Particulars Are True And correct', ml+2, y+12, {size:7.5});
+  txt('Authorized Signatory', rx+rw/2, y+12, {size:8, bold:true, align:'center'});
+  y += declH; line(y, ml, W-mr, 0.6);
+
+  // Save
+  const filename = `Invoice_${d.invNo.padStart(3,'0')}_${d.company.replace(/\s+/g,'_').slice(0,20)}_${d.invDate.replace(/-/g,'')}.pdf`;
+  doc.save(filename);
+}
+</script>
+</body>
+</html>
