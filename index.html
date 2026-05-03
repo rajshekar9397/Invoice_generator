@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sri Sai Durga Caterers — Invoice Generator</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     :root {
       --bg: #faf9f6;
@@ -799,140 +799,60 @@ function renderPreview(d) {
   </div>`;
 }
 
-// ── Generate PDF using jsPDF ─────────────────────────────────────────────────
-function generatePDF() {
+// ── Generate PDF — captures the live HTML preview exactly as shown ────────────
+async function generatePDF() {
   if (!currentData) return;
   const d = currentData;
-  const co = COMPANIES[d.company];
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const W = 210, ml = 12, mr = 12, cw = W - ml - mr;
 
-  let y = 12;
-  const line  = (y1, x1=ml, x2=W-mr, w=0.3) => { doc.setLineWidth(w); doc.line(x1, y1, x2, y1); };
-  const vline = (x, y1, y2, w=0.3) => { doc.setLineWidth(w); doc.line(x, y1, x, y2); };
-  const txt   = (t, x, yy, opts={}) => {
-    doc.setFontSize(opts.size||9);
-    doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
-    if (opts.align === 'center') doc.text(String(t), x, yy, {align:'center'});
-    else if (opts.align === 'right') doc.text(String(t), x, yy, {align:'right'});
-    else doc.text(String(t), x, yy);
-  };
+  const btn = document.getElementById('generateBtn');
+  const dlBtn = document.getElementById('dlBtn');
+  const origText = btn.innerHTML;
+  btn.innerHTML = '⏳ Generating…';
+  btn.disabled = true;
+  dlBtn.disabled = true;
 
-  // Header
-  txt('SRI SAI DURGA CATERERS', W/2, y+6, {size:18, bold:true, align:'center'});
-  y += 8;
-  txt('H.NO: Survey No.271,272 Lingotam(V),Choutuppal (M),Yadadri District', W/2, y+4, {size:8, align:'center'});
-  y += 5; txt('Cell No:9246333799', W/2, y+3, {size:8, align:'center'});
-  y += 4; txt('GSTIN:'+CATERER.gstin, W/2, y+3, {size:8, bold:true, align:'center'});
-  y += 6; line(y); y += 1;
-  txt('TAX INVOICE', W/2, y+4, {size:11, bold:true, align:'center'});
-  y += 6; line(y, ml, W-mr, 0.6);
+  try {
+    const sheet = document.getElementById('invoiceSheet');
+    if (!sheet) { alert('Please wait for the preview to load.'); return; }
 
-  // Meta rows
-  const rh = 6;
-  const metaRows = [
-    [`Invoice No:${d.invNo.padStart(3,'0')}`, 'Work Order No.'],
-    [`Invoice Date:${d.invDate}`, 'Work Order Date:'],
-    ['Reverse Charge (Y/N)', 'No.'],
-    [`State: ${CATERER.state}   Code: ${CATERER.code}`, ''],
-  ];
-  metaRows.forEach(([l, r]) => {
-    vline(ml, y, y+rh); vline(W-mr, y, y+rh); vline(W/2, y, y+rh);
-    txt(l, ml+2, y+4, {size:8, bold: l.startsWith('Invoice')});
-    if (r) txt(r, W/2+2, y+4, {size:8});
-    y += rh; line(y);
-  });
+    // Render the invoice sheet to a high-res canvas
+    const canvas = await html2canvas(sheet, {
+      scale: 3,           // 3× = crisp on retina & in PDF
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      windowWidth: sheet.scrollWidth,
+      windowHeight: sheet.scrollHeight
+    });
 
-  // Party section
-  const partyRows = [
-    ['Name Of The Party (Bill To)', 'NAME OF THE CONSIGNEE'],
-    ['Name: '+d.company, 'Name: '+CATERER.consignee],
-    ['Address: '+co.address, 'Address: '+CATERER.consigneeAddr],
-    ['GSTIN: '+co.gstin, 'GSTIN: '+CATERER.gstin],
-    ['State: '+co.state+'  Code: '+co.code, 'State: '+CATERER.state],
-  ];
-  partyRows.forEach(([l,r], i) => {
-    vline(ml, y, y+rh); vline(W-mr, y, y+rh); vline(W/2, y, y+rh);
-    txt(l, ml+2, y+4, {size:8, bold:i===0});
-    txt(r, W/2+2, y+4, {size:8, bold:i===0});
-    y += rh; line(y);
-  });
+    const imgData = canvas.toDataURL('image/png');
 
-  // Items header
-  const cols = [10, 57, 18, 14, 14, 14, 27]; // widths
-  const headers = ['S.No','Product/Service','HSN/SAC','UOM','Qty.','Rate','Taxable Value'];
-  let x = ml;
-  vline(ml, y, y+rh+1);
-  headers.forEach((h, i) => {
-    txt(h, x + cols[i]/2, y+4, {size:7.5, bold:true, align:'center'});
-    x += cols[i];
-    vline(x, y, y+rh+1);
-  });
-  y += rh; line(y, ml, W-mr, 0.5); y += 1;
+    // A4 dimensions in mm
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const pageW = 210, pageH = 297;
+    const margin = 8; // mm padding on all sides
 
-  // Item row
-  const itemH = 28;
-  vline(ml, y, y+itemH); vline(W-mr, y, y+itemH);
-  x = ml;
-  cols.forEach(c => { x += c; vline(x, y, y+itemH); });
-  txt('1', ml+5, y+5, {size:8, align:'center'});
-  txt('Food supply service', ml+cols[0]+2, y+5, {size:8, bold:true});
-  txt(fmtINR(d.amount)+'.00', W-mr-1, y+5, {size:8, bold:true, align:'right'});
-  y += itemH; line(y, ml, W-mr, 0.6);
+    const printW = pageW - margin * 2;
+    const printH = (canvas.height / canvas.width) * printW;
 
-  // Words
-  const wordsH = 9;
-  vline(ml, y, y+wordsH); vline(W-mr, y, y+wordsH);
-  txt('Total invoice amount (in words): '+amountInWords(d.total), ml+2, y+5, {size:8});
-  y += wordsH; line(y);
+    // If taller than a page, scale down to fit
+    const finalH = Math.min(printH, pageH - margin * 2);
+    const finalW = (canvas.width / canvas.height) * finalH;
+    const xOffset = margin + (printW - finalW) / 2;
 
-  // Totals
-  const lw = cw * 0.54, rw = cw - lw;
-  const rx = ml + lw;
-  const rl = rw * 0.55, rv = rw * 0.45;
-  const totRows = [
-    ['Total amount before tax', fmtINR(d.amount)+'.00', false],
-    ['Add: CGST @9%', fmtINR(d.cgst)+'.00', false],
-    ['Add: SGST @9%', fmtINR(d.sgst)+'.00', false],
-    ['Total tax amount', fmtINR(d.cgst+d.sgst)+'.00', false],
-    ['Total amount after tax', fmtINR(d.total)+'.00', true],
-  ];
-  totRows.forEach(([label, val, bold]) => {
-    vline(ml, y, y+rh); vline(rx, y, y+rh); vline(rx+rl, y, y+rh); vline(W-mr, y, y+rh);
-    txt(label, rx+2, y+4, {size:8, bold});
-    txt(val, W-mr-1, y+4, {size:8, bold, align:'right'});
-    y += rh; line(y);
-  });
+    pdf.addImage(imgData, 'PNG', xOffset, margin, finalW, finalH, '', 'FAST');
 
-  // Bank + certified
-  const bankLines = [
-    'Bank Details: '+CATERER.bank,
-    'Bank Branch: '+CATERER.branch,
-    'Account Name: '+CATERER.accountName,
-    'Bank Account No: '+CATERER.accountNo,
-    'Bank IFSC: '+CATERER.ifsc,
-  ];
-  bankLines.forEach((bl, i) => {
-    vline(ml, y, y+rh); vline(rx, y, y+rh); vline(W-mr, y, y+rh);
-    txt(bl, ml+2, y+4, {size:8});
-    if (i===0) txt('Certified that particulars given above are true and correct', rx+2, y+3.5, {size:7});
-    if (i===1) txt(CATERER.consignee, rx+rw/2, y+4.5, {size:8, bold:true, align:'center'});
-    y += rh; line(y);
-  });
-
-  // Declaration
-  const declH = 16;
-  vline(ml, y, y+declH); vline(rx, y, y+declH); vline(W-mr, y, y+declH);
-  txt('Declaration:', ml+2, y+4, {size:8, bold:true});
-  txt('We Declare That This Invoice Shows The Actual Value Of', ml+2, y+8, {size:7.5});
-  txt('The Described And That All Particulars Are True And correct', ml+2, y+12, {size:7.5});
-  txt('Authorized Signatory', rx+rw/2, y+12, {size:8, bold:true, align:'center'});
-  y += declH; line(y, ml, W-mr, 0.6);
-
-  // Save
-  const filename = `Invoice_${d.invNo.padStart(3,'0')}_${d.company.replace(/\s+/g,'_').slice(0,20)}_${d.invDate.replace(/-/g,'')}.pdf`;
-  doc.save(filename);
+    const filename = `Invoice_${String(d.invNo).padStart(3,'0')}_${d.company.replace(/\s+/g,'_').slice(0,20)}_${d.invDate.replace(/-/g,'')}.pdf`;
+    pdf.save(filename);
+  } catch(err) {
+    console.error(err);
+    alert('PDF generation failed. Please try again.');
+  } finally {
+    btn.innerHTML = origText;
+    btn.disabled = false;
+    dlBtn.disabled = false;
+  }
 }
 </script>
 </body>
